@@ -1,0 +1,50 @@
+# Terraform
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+.terraform/
+.terraform.lock.hcl
+infrastructure/terraform.tfvars
+
+# 환경변수
+.env
+.env.*
+*.env
+
+# Java / Gradle
+*.jar
+*.war
+*.class
+build/
+.gradle/
+out/
+target/
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Docker
+.docker/

@@ -1,0 +1,37 @@
+# ── Stage 1: Build ────────────────────────────────────────────
+FROM gradle:8.7-jdk17 AS builder
+
+WORKDIR /app
+
+# Gradle 캐시 최적화: 의존성 먼저 복사
+COPY backend/build.gradle backend/settings.gradle ./
+COPY backend/src ./src
+
+# 테스트 제외하고 빌드
+RUN gradle build -x test --no-daemon
+
+# ── Stage 2: Runtime ──────────────────────────────────────────
+FROM eclipse-temurin:17-jre-alpine
+
+WORKDIR /app
+
+# 보안: non-root 사용자 생성
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# 빌드 결과물 복사
+COPY --from=builder /app/build/libs/job-portal.jar app.jar
+
+# 로그 디렉토리
+RUN mkdir -p /var/log/app && chown appuser:appgroup /var/log/app
+
+USER appuser
+
+EXPOSE 8080
+
+# 메모리 최적화 JVM 옵션
+ENTRYPOINT ["java", \
+    "-Xms256m", "-Xmx512m", \
+    "-XX:+UseContainerSupport", \
+    "-XX:MaxRAMPercentage=75.0", \
+    "-Djava.security.egd=file:/dev/./urandom", \
+    "-jar", "app.jar"]

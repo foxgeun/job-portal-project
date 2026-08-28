@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # Spring Boot 애플리케이션
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: job-portal-app
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME:-jobportal}
+      - DB_USERNAME=${DB_USERNAME:-root}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - SARAMIN_API_KEY=${SARAMIN_API_KEY:-your-api-key}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - job-portal-network
+    volumes:
+      - app-logs:/var/log/app
+
+  # MySQL 데이터베이스
+  db:
+    image: mysql:8.0
+    container_name: job-portal-db
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASSWORD:-password}
+      - MYSQL_DATABASE=${DB_NAME:-jobportal}
+      - MYSQL_CHARACTER_SET_SERVER=utf8mb4
+      - MYSQL_COLLATION_SERVER=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD:-password}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - job-portal-network
+
+volumes:
+  mysql-data:
+    driver: local
+  app-logs:
+    driver: local
+
+networks:
+  job-portal-network:
+    driver: bridge
