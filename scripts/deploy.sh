@@ -1,4 +1,6 @@
 #!/bin/bash
+exec > >(tee /home/ec2-user/deploy_run.log) 2>&1
+set -x
 set -e
 
 ECR_REGISTRY="$1"
