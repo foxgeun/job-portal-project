@@ -74,18 +74,6 @@ jobs:
     environment: production
 
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Copy deployment scripts to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "scripts/deploy.sh"
-          target: "/home/ec2-user/"
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -105,5 +93,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
+            mkdir -p ~/scripts
+            echo "IyEvYmluL2Jhc2gKc2V0IC1lCgpFQ1JfUkVHSVNUUlk9IiQxIgpFQ1JfUkVQTz0iJDIiCkVDUl9QQVNTV09SRD0iJDMiCklNQUdFX1RBRz0iJDQiCkRCX0hPU1Q9IiQ1IgpEQl9OQU1FPSIkNiIKREJfVVNFUk5BTUU9IiQ3IgpEQl9QQVNTV09SRD0iJDgiCgplY2hvICJMb2dnaW5nIGludG8gRUNSLi4uIgplY2hvICIkRUNSX1BBU1NXT1JEIiB8IGRvY2tlciBsb2dpbiAtLXVzZXJuYW1lIEFXUyAtLXBhc3N3b3JkLXN0ZGluICIkRUNSX1JFR0lTVFJZIiB8fCB0cnVlCgppZiBkb2NrZXIgcHMgLS1maWx0ZXIgIm5hbWU9YXBwLWJsdWUiIC0tZmlsdGVyICJzdGF0dXM9cnVubmluZyIgLXEgfCBncmVwIC1xIC47IHRoZW4KICAgIE5FV19QT1JUPTgwODEKICAgIE5FV19DT05UQUlORVI9ImFwcC1ncmVlbiIKICAgIE9MRF9DT05UQUlORVI9ImFwcC1ibHVlIgplbHNlCiAgICBORVdfUE9SVD04MDgwCiAgICBORVdfQ09OVEFJTkVSPSJhcHAtYmx1ZSIKICAgIE9MRF9DT05UQUlORVI9ImFwcC1ncmVlbiIKZmkKCkZVTExfSU1BR0U9IiR7RUNSX1JFR0lTVFJZfS8ke0VDUl9SRVBPfToke0lNQUdFX1RBR30iCmVjaG8gIkRlcGxveWluZyAkTkVXX0NPTlRBSU5FUiBvbiBwb3J0ICRORVdfUE9SVCB3aXRoIGltYWdlICRGVUxMX0lNQUdFLi4uIgpkb2NrZXIgcHVsbCAiJEZVTExfSU1BR0UiCgpkb2NrZXIgcm0gLWYgIiRORVdfQ09OVEFJTkVSIiAyPi9kZXYvbnVsbCB8fCB0cnVlCmZvciBwaWQgaW4gJChkb2NrZXIgcHMgLS1maWx0ZXIgInB1Ymxpc2g9JE5FV19QT1JUIiAtcSk7IGRvCiAgICBkb2NrZXIgcm0gLWYgIiRwaWQiIDI+L2Rldi9udWxsIHx8IHRydWUKZG9uZQoKZG9ja2VyIHJ1biAtZCBcCiAgLS1uYW1lICIkTkVXX0NPTlRBSU5FUiIgXAogIC0tcmVzdGFydCB1bmxlc3Mtc3RvcHBlZCBcCiAgLXAgIiRORVdfUE9SVDo4MDgwIiBcCiAgLWUgREJfSE9TVD0iJERCX0hPU1QiIFwKICAtZSBEQl9OQU1FPSIkREJfTkFNRSIgXAogIC1lIERCX1VTRVJOQU1FPSIkREJfVVNFUk5BTUUiIFwKICAtZSBEQl9QQVNTV09SRD0iJERCX1BBU1NXT1JEIiBcCiAgIiRGVUxMX0lNQUdFIgoKZWNobyAiV2FpdGluZyAyMHMgZm9yIFNwcmluZyBCb290IHN0YXJ0dXAuLi4iCnNsZWVwIDIwCgpTVEFUVVM9JChjdXJsIC1zIC1vIC9kZXYvbnVsbCAtdyAiJXtodHRwX2NvZGV9IiAiaHR0cDovL2xvY2FsaG9zdDokTkVXX1BPUlQvYWN0dWF0b3IvaGVhbHRoIiAyPi9kZXYvbnVsbCB8fCBlY2hvICIwMDAiKQplY2hvICJIZWFsdGggY2hlY2sgc3RhdHVzIG9uIHBvcnQgJE5FV19QT1JUOiAkU1RBVFVTIgoKaWYgWyAiJFNUQVRVUyIgPSAiMjAwIiBdOyB0aGVuCiAgaWYgZG9ja2VyIHBzIC1hIC0tZm9ybWF0ICd7ey5OYW1lc319JyB8IGdyZXAgLXEgIl4ke09MRF9DT05UQUlORVJ9JCI7IHRoZW4KICAgIGRvY2tlciBzdG9wICIkT0xEX0NPTlRBSU5FUiIgMj4vZGV2L251bGwgfHwgdHJ1ZQogICAgZG9ja2VyIHJtICIkT0xEX0NPTlRBSU5FUiIgMj4vZGV2L251bGwgfHwgdHJ1ZQogIGZpCiAgZWNobyAi8J+agCBEZXBsb3ltZW50IFN1Y2NlZWRlZCEiCiAgZXhpdCAwCmVsc2UKICBlY2hvICLinYwgSGVhbHRoIGNoZWNrIGZhaWxlZCB3aXRoIHN0YXR1cyAkU1RBVFVTIgogIGRvY2tlciBybSAtZiAiJE5FV19DT05UQUlORVIiIDI+L2Rldi9udWxsIHx8IHRydWUKICBleGl0IDEKZmk=" | base64 -d > ~/scripts/deploy.sh
             chmod +x ~/scripts/deploy.sh
-            ~/scripts/deploy.sh "${{ steps.login-ecr.outputs.registry }}" "${{ env.ECR_REPOSITORY }}" "${{ steps.login-ecr.outputs.docker_password }}" "${{ github.sha }}" "${{ secrets.DB_HOST }}" "${{ secrets.DB_NAME }}" "${{ secrets.DB_USERNAME }}" "${{ secrets.DB_PASSWORD }}"
+            bash ~/scripts/deploy.sh "${{ steps.login-ecr.outputs.registry }}" "${{ env.ECR_REPOSITORY }}" "${{ steps.login-ecr.outputs.docker_password }}" "${{ github.sha }}" "${{ secrets.DB_HOST }}" "${{ secrets.DB_NAME }}" "${{ secrets.DB_USERNAME }}" "${{ secrets.DB_PASSWORD }}"
