@@ -139,16 +139,16 @@ jobs:
               -e DB_PASSWORD="$DB_PASSWORD" \
               "$FULL_IMAGE"
 
-            # Health Check
+            # Health Check (Up to 20 attempts x 5s = 100s)
             HEALTHY=0
-            for i in $(seq 1 15); do
+            for i in $(seq 1 20); do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/actuator/health" 2>/dev/null || echo "000")
               if [ "$STATUS" = "200" ]; then
                 echo "✅ Health check passed on port $NEW_PORT!"
                 HEALTHY=1
                 break
               fi
-              echo "Waiting for Spring Boot on port $NEW_PORT... ($i/15) status: $STATUS"
+              echo "Waiting for Spring Boot on port $NEW_PORT... ($i/20) status: $STATUS"
               sleep 5
             done
 
