@@ -87,27 +87,27 @@ jobs:
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.1.0
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPO: ${{ env.ECR_REPOSITORY }}
-          ECR_PASSWORD: ${{ steps.login-ecr.outputs.docker_password }}
-          IMAGE_TAG: ${{ github.sha }}
-          AWS_REGION: ${{ env.AWS_REGION }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_NAME: ${{ secrets.DB_NAME }}
-          DB_USERNAME: ${{ secrets.DB_USERNAME }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
-          envs: ECR_REGISTRY,ECR_REPO,ECR_PASSWORD,IMAGE_TAG,AWS_REGION,DB_HOST,DB_NAME,DB_USERNAME,DB_PASSWORD
           script: |
             mkdir -p ~/scripts ~/logs
             
-            # GitHub Actions에서 인증받은 ECR 패스워드로 Docker 로그인
-            echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin $ECR_REGISTRY
+            # ECR registry & credentials direct interpolation
+            ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+            ECR_REPO="${{ env.ECR_REPOSITORY }}"
+            ECR_PASSWORD="${{ steps.login-ecr.outputs.docker_password }}"
+            IMAGE_TAG="${{ github.sha }}"
+            DB_HOST="${{ secrets.DB_HOST }}"
+            DB_NAME="${{ secrets.DB_NAME }}"
+            DB_USERNAME="${{ secrets.DB_USERNAME }}"
+            DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+            SARAMIN_API_KEY="${{ secrets.SARAMIN_API_KEY }}"
+            
+            # ECR Docker Login
+            echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
             # Blue-Green 무중단 배포 진행
             ACTIVE_BLUE=$(docker ps --filter "name=app-blue" --filter "status=running" -q | wc -l)
