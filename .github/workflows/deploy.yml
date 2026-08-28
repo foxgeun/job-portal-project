@@ -93,10 +93,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
-            set -x
             mkdir -p ~/scripts ~/logs
             
-            # ECR registry & credentials direct interpolation
             ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
             ECR_REPO="${{ env.ECR_REPOSITORY }}"
             ECR_PASSWORD="${{ steps.login-ecr.outputs.docker_password }}"
@@ -106,12 +104,11 @@ jobs:
             DB_USERNAME="${{ secrets.DB_USERNAME }}"
             DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
             
-            # ECR Docker Login
-            echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+            # Docker ECR Login
+            echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY" || true
 
-            # Blue-Green 무중단 배포 진행
-            ACTIVE_BLUE=$(docker ps --filter "name=app-blue" --filter "status=running" -q | wc -l)
-            if [ "$ACTIVE_BLUE" -gt 0 ]; then
+            # Determine Blue/Green Port & Container
+            if docker ps --filter "name=app-blue" --filter "status=running" -q | grep -q .; then
                 NEW_PORT=8081
                 NEW_CONTAINER="app-green"
                 OLD_CONTAINER="app-blue"
@@ -125,13 +122,13 @@ jobs:
             FULL_IMAGE="$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
             docker pull "$FULL_IMAGE"
             
-            # 기존 동일 이름 또는 동일 포트 점유 컨테이너 방어적 정리
+            # Clean up target container & occupied port if any
             docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
-            OLD_PORT_HOLDER=$(docker ps --filter "publish=$NEW_PORT" -q)
-            if [ -n "$OLD_PORT_HOLDER" ]; then
-                docker rm -f $OLD_PORT_HOLDER 2>/dev/null || true
-            fi
+            for pid in $(docker ps --filter "publish=$NEW_PORT" -q); do
+                docker rm -f "$pid" 2>/dev/null || true
+            done
 
+            # Run new container
             docker run -d \
               --name "$NEW_CONTAINER" \
               --restart unless-stopped \
@@ -142,20 +139,20 @@ jobs:
               -e DB_PASSWORD="$DB_PASSWORD" \
               "$FULL_IMAGE"
 
-            # 헬스 체크 (최대 15회 x 5초)
-            HEALTHY=false
+            # Health Check
+            HEALTHY=0
             for i in $(seq 1 15); do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/actuator/health" 2>/dev/null || echo "000")
               if [ "$STATUS" = "200" ]; then
                 echo "✅ Health check passed on port $NEW_PORT!"
-                HEALTHY=true
+                HEALTHY=1
                 break
               fi
               echo "Waiting for Spring Boot on port $NEW_PORT... ($i/15) status: $STATUS"
               sleep 5
             done
 
-            if [ "$HEALTHY" = "true" ]; then
+            if [ "$HEALTHY" -eq 1 ]; then
               if docker ps -a --format '{{.Names}}' | grep -q "^${OLD_CONTAINER}$"; then
                 docker stop "$OLD_CONTAINER" 2>/dev/null || true
                 docker rm "$OLD_CONTAINER" 2>/dev/null || true
