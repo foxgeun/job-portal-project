@@ -125,7 +125,13 @@ jobs:
             echo "Deploying new container $NEW_CONTAINER on port $NEW_PORT..."
             FULL_IMAGE="$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
             docker pull "$FULL_IMAGE"
+            
+            # 기존 동일 이름 또는 동일 포트 점유 컨테이너 방어적 정리
             docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
+            OLD_PORT_HOLDER=$(docker ps --filter "publish=$NEW_PORT" -q)
+            if [ -n "$OLD_PORT_HOLDER" ]; then
+                docker rm -f $OLD_PORT_HOLDER 2>/dev/null || true
+            fi
 
             docker run -d \
               --name "$NEW_CONTAINER" \
