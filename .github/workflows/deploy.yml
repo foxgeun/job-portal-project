@@ -28,26 +28,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/build.gradle', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-        working-directory: backend
+          gradle-version: '8.7'
 
       - name: Run tests
-        run: ./gradlew test
+        run: gradle test
         working-directory: backend
 
-      - name: Build with Gradle (skip tests - already ran)
-        run: ./gradlew build -x test
+      - name: Build with Gradle (skip tests)
+        run: gradle build -x test
         working-directory: backend
 
       - name: Configure AWS credentials
@@ -70,7 +61,8 @@ jobs:
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_STEP_SUMMARY
+          echo "### ✅ Docker Image Pushed" >> $GITHUB_STEP_SUMMARY
+          echo "- Image: \`$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG\`" >> $GITHUB_STEP_SUMMARY
 
   # ─────────────────────────────────────────────
   # 2. Deploy to EC2 via SSH
@@ -112,11 +104,8 @@ jobs:
           timeout: 120s
           envs: ECR_REGISTRY,ECR_REPO,IMAGE_TAG,AWS_REGION,DB_HOST,DB_NAME,DB_USERNAME,DB_PASSWORD,SARAMIN_API_KEY
           script: |
-            # ECR 로그인
             aws ecr get-login-password --region $AWS_REGION | \
               docker login --username AWS --password-stdin $ECR_REGISTRY
-
-            # 환경변수 export
             export ECR_REGISTRY=$ECR_REGISTRY
             export ECR_REPOSITORY=$ECR_REPO
             export IMAGE_TAG=$IMAGE_TAG
@@ -125,7 +114,5 @@ jobs:
             export DB_USERNAME=$DB_USERNAME
             export DB_PASSWORD=$DB_PASSWORD
             export SARAMIN_API_KEY=$SARAMIN_API_KEY
-
-            # 배포 스크립트 실행
             chmod +x ~/scripts/deploy.sh
             ~/scripts/deploy.sh
