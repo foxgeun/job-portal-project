@@ -93,8 +93,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
-            mkdir -p ~/scripts
-            cat << 'EOF' > ~/scripts/deploy.sh
+            cat << 'EOF' > /tmp/deploy.sh
             #!/bin/bash
             set -e
 
@@ -158,5 +157,5 @@ jobs:
               exit 1
             fi
             EOF
-            chmod +x ~/scripts/deploy.sh
-            bash ~/scripts/deploy.sh "${{ steps.login-ecr.outputs.registry }}" "${{ env.ECR_REPOSITORY }}" "${{ steps.login-ecr.outputs.docker_password }}" "${{ github.sha }}" "${{ secrets.DB_HOST }}" "${{ secrets.DB_NAME }}" "${{ secrets.DB_USERNAME }}" "${{ secrets.DB_PASSWORD }}"
+            chmod +x /tmp/deploy.sh
+            bash /tmp/deploy.sh "${{ steps.login-ecr.outputs.registry }}" "${{ env.ECR_REPOSITORY }}" "${{ steps.login-ecr.outputs.docker_password }}" "${{ github.sha }}" "${{ secrets.DB_HOST }}" "${{ secrets.DB_NAME }}" "${{ secrets.DB_USERNAME }}" "${{ secrets.DB_PASSWORD }}"
