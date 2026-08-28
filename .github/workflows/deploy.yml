@@ -93,25 +93,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
-            mkdir -p ~/scripts ~/logs
-            cat << 'EOF' > ~/scripts/deploy_runner.sh
-            #!/bin/bash
-            exec > >(tee -a ~/logs/deploy.log) 2>&1
-            echo "=== DEPLOY START: $(date) ==="
-
-            ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
-            ECR_REPO="${{ env.ECR_REPOSITORY }}"
-            ECR_PASSWORD="${{ steps.login-ecr.outputs.docker_password }}"
-            IMAGE_TAG="${{ github.sha }}"
-            DB_HOST="${{ secrets.DB_HOST }}"
-            DB_NAME="${{ secrets.DB_NAME }}"
-            DB_USERNAME="${{ secrets.DB_USERNAME }}"
-            DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
-
-            echo "Logging into ECR..."
-            echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY" || exit 1
-
-            if docker ps --filter "name=app-blue" --filter "status=running" -q | grep -q .; then
+            echo "${{ steps.login-ecr.outputs.docker_password }}" | docker login --username AWS --password-stdin "${{ steps.login-ecr.outputs.registry }}"
+            
+            ACTIVE_BLUE=$(docker ps --filter "name=app-blue" --filter "status=running" -q | wc -l)
+            if [ "$ACTIVE_BLUE" -gt 0 ]; then
                 NEW_PORT=8081
                 NEW_CONTAINER="app-green"
                 OLD_CONTAINER="app-blue"
@@ -122,48 +107,34 @@ jobs:
             fi
 
             echo "Deploying $NEW_CONTAINER on port $NEW_PORT..."
-            FULL_IMAGE="$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
-            docker pull "$FULL_IMAGE" || exit 1
+            FULL_IMAGE="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+            docker pull "$FULL_IMAGE"
 
-            docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
-            for pid in $(docker ps --filter "publish=$NEW_PORT" -q); do
-                docker rm -f "$pid" 2>/dev/null || true
-            done
+            docker rm -f "$NEW_CONTAINER" || true
+            docker rm -f $(docker ps --filter "publish=$NEW_PORT" -q) || true
 
             docker run -d \
               --name "$NEW_CONTAINER" \
               --restart unless-stopped \
               -p "$NEW_PORT:8080" \
-              -e DB_HOST="$DB_HOST" \
-              -e DB_NAME="$DB_NAME" \
-              -e DB_USERNAME="$DB_USERNAME" \
-              -e DB_PASSWORD="$DB_PASSWORD" \
-              "$FULL_IMAGE" || exit 1
+              -e DB_HOST="${{ secrets.DB_HOST }}" \
+              -e DB_NAME="${{ secrets.DB_NAME }}" \
+              -e DB_USERNAME="${{ secrets.DB_USERNAME }}" \
+              -e DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+              "$FULL_IMAGE"
 
-            HEALTHY=0
-            for i in $(seq 1 20); do
-              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/actuator/health" 2>/dev/null || echo "000")
-              if [ "$STATUS" = "200" ]; then
-                echo "✅ Health check passed on port $NEW_PORT!"
-                HEALTHY=1
-                break
-              fi
-              echo "Waiting for Spring Boot on port $NEW_PORT... ($i/20) status: $STATUS"
-              sleep 5
-            done
+            echo "Waiting 20s for Spring Boot startup..."
+            sleep 20
 
-            if [ "$HEALTHY" -eq 1 ]; then
-              if docker ps -a --format '{{.Names}}' | grep -q "^${OLD_CONTAINER}$"; then
-                docker stop "$OLD_CONTAINER" 2>/dev/null || true
-                docker rm "$OLD_CONTAINER" 2>/dev/null || true
-              fi
-              echo "🚀 Deployment succeeded!"
-              exit 0
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/actuator/health" || echo "000")
+            echo "Health status on port $NEW_PORT: $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
+              docker stop "$OLD_CONTAINER" || true
+              docker rm "$OLD_CONTAINER" || true
+              echo "🚀 Deployment Succeeded!"
             else
-              echo "❌ Health check failed."
-              docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
+              echo "❌ Health check failed with status $STATUS"
+              docker rm -f "$NEW_CONTAINER" || true
               exit 1
             fi
-            EOF
-            chmod +x ~/scripts/deploy_runner.sh
-            bash ~/scripts/deploy_runner.sh
