@@ -74,18 +74,6 @@ jobs:
     environment: production
 
     steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Copy scripts to EC2
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "scripts/*"
-          target: "~/"
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -113,18 +101,62 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          timeout: 120s
+          timeout: 300s
           envs: ECR_REGISTRY,ECR_REPO,IMAGE_TAG,AWS_REGION,DB_HOST,DB_NAME,DB_USERNAME,DB_PASSWORD,SARAMIN_API_KEY
           script: |
+            mkdir -p ~/scripts ~/logs
+            
+            # ECR 로그인
             aws ecr get-login-password --region $AWS_REGION | \
               docker login --username AWS --password-stdin $ECR_REGISTRY
-            export ECR_REGISTRY=$ECR_REGISTRY
-            export ECR_REPOSITORY=$ECR_REPO
-            export IMAGE_TAG=$IMAGE_TAG
-            export DB_HOST=$DB_HOST
-            export DB_NAME=$DB_NAME
-            export DB_USERNAME=$DB_USERNAME
-            export DB_PASSWORD=$DB_PASSWORD
-            export SARAMIN_API_KEY=$SARAMIN_API_KEY
-            chmod +x ~/scripts/deploy.sh
-            ~/scripts/deploy.sh
+
+            # Blue-Green 무중단 배포 진행
+            ACTIVE_BLUE=$(docker ps --filter "name=app-blue" --filter "status=running" -q | wc -l)
+            if [ "$ACTIVE_BLUE" -gt 0 ]; then
+                NEW_PORT=8081
+                NEW_CONTAINER="app-green"
+                OLD_CONTAINER="app-blue"
+            else
+                NEW_PORT=8080
+                NEW_CONTAINER="app-blue"
+                OLD_CONTAINER="app-green"
+            fi
+
+            echo "Deploying new container $NEW_CONTAINER on port $NEW_PORT..."
+            FULL_IMAGE="$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+            docker pull "$FULL_IMAGE"
+            docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
+
+            docker run -d \
+              --name "$NEW_CONTAINER" \
+              --restart unless-stopped \
+              -p "$NEW_PORT:8080" \
+              -e DB_HOST="$DB_HOST" \
+              -e DB_NAME="$DB_NAME" \
+              -e DB_USERNAME="$DB_USERNAME" \
+              -e DB_PASSWORD="$DB_PASSWORD" \
+              -e SARAMIN_API_KEY="$SARAMIN_API_KEY" \
+              "$FULL_IMAGE"
+
+            # 헬스 체크 (최대 10회)
+            HEALTHY=false
+            for i in $(seq 1 10); do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/actuator/health" || echo "000")
+              if [ "$STATUS" = "200" ]; then
+                echo "✅ Health check passed on port $NEW_PORT!"
+                HEALTHY=true
+                break
+              fi
+              echo "Waiting for container on port $NEW_PORT... ($i/10) status: $STATUS"
+              sleep 5
+            done
+
+            if [ "$HEALTHY" = "true" ]; then
+              docker stop "$OLD_CONTAINER" 2>/dev/null || true
+              docker rm "$OLD_CONTAINER" 2>/dev/null || true
+              echo "🚀 Deployment succeeded! $NEW_CONTAINER is active on port $NEW_PORT."
+            else
+              echo "❌ Health check failed. Rolling back $NEW_CONTAINER."
+              docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
+              exit 1
+            fi
