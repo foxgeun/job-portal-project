@@ -8,20 +8,14 @@ resource "aws_instance" "app_server" {
 
   user_data = <<-SCRIPT
     #!/bin/bash
-    set -e
-    yum update -y
-    amazon-linux-extras install docker -y
+    dnf update -y
+    dnf install -y docker awscli
     systemctl start docker
     systemctl enable docker
     usermod -aG docker ec2-user
-    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" \
-      -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-    ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
-    yum install -y aws-cli
     mkdir -p /home/ec2-user/scripts /home/ec2-user/logs
-    chown ec2-user:ec2-user /home/ec2-user/scripts /home/ec2-user/logs
-    echo "EC2 초기화 완료: $(date)" >> /home/ec2-user/init.log
+    chown -R ec2-user:ec2-user /home/ec2-user/scripts /home/ec2-user/logs
+    chmod 755 /home/ec2-user/scripts /home/ec2-user/logs
   SCRIPT
 
   root_block_device {

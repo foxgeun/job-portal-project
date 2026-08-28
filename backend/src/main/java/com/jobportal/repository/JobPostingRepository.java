@@ -18,6 +18,8 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Long> {
 
     Optional<JobPosting> findByJobUrl(String jobUrl);
 
+    List<JobPosting> findAllByJobUrlIn(java.util.Collection<String> jobUrls);
+
     List<JobPosting> findByLocationContaining(String location);
 
     List<JobPosting> findByCompanyNameContaining(String companyName);

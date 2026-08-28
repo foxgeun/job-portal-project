@@ -35,7 +35,7 @@ public class JobPosting {
     @Column(length = 100)
     private String salary;
 
-    @Column(unique = true, nullable = false, length = 1000)
+    @Column(unique = true, nullable = false, length = 500)
     private String jobUrl;
 
     private LocalDate postedDate;
