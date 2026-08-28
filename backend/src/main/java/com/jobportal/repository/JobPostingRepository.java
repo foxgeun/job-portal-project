@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -27,5 +28,5 @@ public interface JobPostingRepository extends JpaRepository<JobPosting, Long> {
 
     @Modifying
     @Query("DELETE FROM JobPosting j WHERE j.expirationDate < :today")
-    int deleteExpiredPostings(@org.springframework.data.repository.query.Param("today") LocalDate today);
+    int deleteExpiredPostings(@Param("today") LocalDate today);
 }
