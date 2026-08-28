@@ -156,9 +156,12 @@ jobs:
             done
 
             if [ "$HEALTHY" = "true" ]; then
-              docker stop "$OLD_CONTAINER" 2>/dev/null || true
-              docker rm "$OLD_CONTAINER" 2>/dev/null || true
+              if docker ps -a --format '{{.Names}}' | grep -q "^${OLD_CONTAINER}$"; then
+                docker stop "$OLD_CONTAINER" 2>/dev/null || true
+                docker rm "$OLD_CONTAINER" 2>/dev/null || true
+              fi
               echo "🚀 Deployment succeeded! $NEW_CONTAINER is active on port $NEW_PORT."
+              exit 0
             else
               echo "❌ Health check failed. Rolling back $NEW_CONTAINER."
               docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
