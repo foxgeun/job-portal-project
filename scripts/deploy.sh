@@ -1,69 +1,42 @@
 #!/bin/bash
-# =============================================================
-# 무중단 배포 스크립트 (Blue-Green 포트 스위치 방식)
-# 현재 활성 포트를 확인하고, 반대 포트에 새 컨테이너를 기동합니다.
-# =============================================================
 set -e
 
-ECR_REGISTRY="${ECR_REGISTRY}"
-ECR_REPOSITORY="${ECR_REPOSITORY:-job-portal}"
-IMAGE_TAG="${IMAGE_TAG:-latest}"
-FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+ECR_REGISTRY="${1:-$ECR_REGISTRY}"
+ECR_REPO="${2:-$ECR_REPOSITORY}"
+ECR_PASSWORD="${3:-$ECR_PASSWORD}"
+IMAGE_TAG="${4:-$IMAGE_TAG}"
+DB_HOST="${5:-$DB_HOST}"
+DB_NAME="${6:-$DB_NAME}"
+DB_USERNAME="${7:-$DB_USERNAME}"
+DB_PASSWORD="${8:-$DB_PASSWORD}"
 
-BLUE_PORT=8080
-GREEN_PORT=8081
-HEALTH_CHECK_RETRIES=12
-HEALTH_CHECK_INTERVAL=10
+echo "=== Starting Blue-Green Deployment ==="
 
-# ── 현재 활성 포트/컨테이너 판별 ──────────────────────────────
-CURRENT_PORT=$(docker ps --filter "name=app-blue" --filter "status=running" -q | wc -l)
-if [ "$CURRENT_PORT" -gt 0 ]; then
-    ACTIVE_PORT=$BLUE_PORT
-    ACTIVE_CONTAINER="app-blue"
-    NEW_PORT=$GREEN_PORT
-    NEW_CONTAINER="app-green"
-else
-    ACTIVE_PORT=$GREEN_PORT
-    ACTIVE_CONTAINER="app-green"
-    NEW_PORT=$BLUE_PORT
-    NEW_CONTAINER="app-blue"
+# Docker ECR Login
+if [ -n "$ECR_PASSWORD" ] && [ -n "$ECR_REGISTRY" ]; then
+    echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY" || true
 fi
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] 현재 활성: ${ACTIVE_CONTAINER}(${ACTIVE_PORT}) → 신규 배포: ${NEW_CONTAINER}(${NEW_PORT})"
+# Determine Blue/Green Port
+if docker ps --filter "name=app-blue" --filter "status=running" -q | grep -q .; then
+    NEW_PORT=8081
+    NEW_CONTAINER="app-green"
+    OLD_CONTAINER="app-blue"
+else
+    NEW_PORT=8080
+    NEW_CONTAINER="app-blue"
+    OLD_CONTAINER="app-green"
+fi
 
-# ── 새 이미지 Pull ────────────────────────────────────────────
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Docker 이미지 Pull: ${FULL_IMAGE}"
-docker pull "${FULL_IMAGE}"
+FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
+echo "Deploying container $NEW_CONTAINER on port $NEW_PORT with image $FULL_IMAGE..."
 
-# ── 신규 컨테이너 실행 ────────────────────────────────────────
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] ${NEW_CONTAINER} 컨테이너 시작 (포트: ${NEW_PORT})"
+docker pull "$FULL_IMAGE"
 
-# 이전 같은 이름의 컨테이너가 있으면 제거
-docker rm -f "${NEW_CONTAINER}" 2>/dev/null || true
-
-docker run -d \
-    --name "${NEW_CONTAINER}" \
-    --restart unless-stopped \
-    -p "${NEW_PORT}:8080" \
-    -e DB_HOST="${DB_HOST}" \
-    -e DB_NAME="${DB_NAME}" \
-    -e DB_USERNAME="${DB_USERNAME}" \
-    -e DB_PASSWORD="${DB_PASSWORD}" \
-    -e SARAMIN_API_KEY="${SARAMIN_API_KEY}" \
-    "${FULL_IMAGE}"
-
-# ── 헬스체크 ─────────────────────────────────────────────────
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] 헬스체크 시작 (최대 ${HEALTH_CHECK_RETRIES}회 / ${HEALTH_CHECK_INTERVAL}초 간격)"
-HEALTHY=false
-for i in $(seq 1 $HEALTH_CHECK_RETRIES); do
-    STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${NEW_PORT}/actuator/health" 2>/dev/null || echo "000")
-    if [ "$STATUS" = "200" ]; then
-        echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ 헬스체크 성공 (시도 ${i}/${HEALTH_CHECK_RETRIES})"
-        HEALTHY=true
-        break
-    fi
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⏳ 대기 중... (${i}/${HEALTH_CHECK_RETRIES}) HTTP Status: ${STATUS}"
-    sleep $HEALTH_CHECK_INTERVAL
+# Clean existing target container & occupied port
+docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
+for pid in $(docker ps --filter "publish=$NEW_PORT" -q); do
+    docker rm -f "$pid" 2>/dev/null || true
 done
 
 if [ "$HEALTHY" != "true" ]; then
