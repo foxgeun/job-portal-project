@@ -88,6 +88,6 @@ jobs:
       - name: Deploy to EC2 via Native OpenSSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
+          echo "LS0tLS1CRUdJTiBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0KYjNCbGJuTnphQzFyWlhrdGRqRUFBQUFBQkc1dmJtVUFBQUFFYm05dVpRQUFBQUFBQUFBQkFBQUFNd0FBQUF0emMyZ3RaVwpReU5UVXhPUUFBQUNCSktwUm1nUlBGMEc1aDVCT0ZyVXVEL0YxOEV0aHNXM2JTdnhXRDJZcTNWd0FBQUpnZFVMd3FIVkM4CktnQUFBQXR6YzJndFpXUXlOVFV4T1FBQUFDQkpLcFJtZ1JQRjBHNWg1Qk9GclV1RC9GMThFdGhzVzNiU3Z4V0QyWXEzVncKQUFBRUFxOW1RZFlWemViQkFOOElOL1Z0cG8vdTVnTmdBTnNuUkk3Q0VFS0k0WndVa3FsR2FCRThYUWJtSGtFNFd0UzRQOApYWHdTMkd4YmR0Sy9GWVBaaXJkWEFBQUFGV1pwY25OMFFFUkZVMHRVVDFBdFFsWXpUMVpSU2c9PQotLS0tLUVORCBPUEVOU1NIIFBSSVZBVEUgS0VZLS0tLS0K" | base64 -d > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh -o StrictHostKeyChecking=no ec2-user@${{ secrets.EC2_HOST }} "/bin/bash /home/ec2-user/scripts/deploy.sh '${{ secrets.AWS_ACCESS_KEY_ID }}' '${{ secrets.AWS_SECRET_ACCESS_KEY }}' '${{ steps.login-ecr.outputs.registry }}' '${{ env.ECR_REPOSITORY }}' '${{ secrets.DB_HOST }}' '${{ secrets.DB_NAME }}' '${{ secrets.DB_USERNAME }}' '${{ secrets.DB_PASSWORD }}'"
