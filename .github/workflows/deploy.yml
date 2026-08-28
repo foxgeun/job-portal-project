@@ -138,16 +138,16 @@ jobs:
               -e SARAMIN_API_KEY="$SARAMIN_API_KEY" \
               "$FULL_IMAGE"
 
-            # 헬스 체크 (최대 10회)
+            # 헬스 체크 (최대 15회 x 5초)
             HEALTHY=false
-            for i in $(seq 1 10); do
-              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/actuator/health" || echo "000")
+            for i in $(seq 1 15); do
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/actuator/health" 2>/dev/null || echo "000")
               if [ "$STATUS" = "200" ]; then
                 echo "✅ Health check passed on port $NEW_PORT!"
                 HEALTHY=true
                 break
               fi
-              echo "Waiting for container on port $NEW_PORT... ($i/10) status: $STATUS"
+              echo "Waiting for Spring Boot on port $NEW_PORT... ($i/15) status: $STATUS"
               sleep 5
             done
 
