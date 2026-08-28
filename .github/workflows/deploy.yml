@@ -93,20 +93,24 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
-            bash -c '
-            ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
-            ECR_REPO="${{ env.ECR_REPOSITORY }}"
-            ECR_PASSWORD="${{ steps.login-ecr.outputs.docker_password }}"
-            IMAGE_TAG="${{ github.sha }}"
-            DB_HOST="${{ secrets.DB_HOST }}"
-            DB_NAME="${{ secrets.DB_NAME }}"
-            DB_USERNAME="${{ secrets.DB_USERNAME }}"
-            DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+            mkdir -p ~/scripts
+            cat << 'EOF' > ~/scripts/deploy.sh
+            #!/bin/bash
+            set -e
 
+            ECR_REGISTRY="$1"
+            ECR_REPO="$2"
+            ECR_PASSWORD="$3"
+            IMAGE_TAG="$4"
+            DB_HOST="$5"
+            DB_NAME="$6"
+            DB_USERNAME="$7"
+            DB_PASSWORD="$8"
+
+            echo "Logging into ECR..."
             echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY" || true
 
-            ACTIVE_BLUE=$(docker ps --filter "name=app-blue" --filter "status=running" -q | wc -l)
-            if [ "$ACTIVE_BLUE" -gt 0 ]; then
+            if docker ps --filter "name=app-blue" --filter "status=running" -q | grep -q .; then
                 NEW_PORT=8081
                 NEW_CONTAINER="app-green"
                 OLD_CONTAINER="app-blue"
@@ -116,8 +120,8 @@ jobs:
                 OLD_CONTAINER="app-green"
             fi
 
-            echo "Deploying $NEW_CONTAINER on port $NEW_PORT..."
-            FULL_IMAGE="$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+            FULL_IMAGE="${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}"
+            echo "Deploying $NEW_CONTAINER on port $NEW_PORT with image $FULL_IMAGE..."
             docker pull "$FULL_IMAGE"
 
             docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
@@ -135,19 +139,24 @@ jobs:
               -e DB_PASSWORD="$DB_PASSWORD" \
               "$FULL_IMAGE"
 
-            echo "Waiting 20s for container startup..."
+            echo "Waiting 20s for Spring Boot startup..."
             sleep 20
 
             STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/actuator/health" 2>/dev/null || echo "000")
-            echo "Health status on port $NEW_PORT: $STATUS"
+            echo "Health check status on port $NEW_PORT: $STATUS"
 
             if [ "$STATUS" = "200" ]; then
-              docker stop "$OLD_CONTAINER" 2>/dev/null || true
-              docker rm "$OLD_CONTAINER" 2>/dev/null || true
+              if docker ps -a --format '{{.Names}}' | grep -q "^${OLD_CONTAINER}$"; then
+                docker stop "$OLD_CONTAINER" 2>/dev/null || true
+                docker rm "$OLD_CONTAINER" 2>/dev/null || true
+              fi
               echo "🚀 Deployment Succeeded!"
+              exit 0
             else
-              echo "❌ Health check failed"
+              echo "❌ Health check failed with status $STATUS"
               docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
               exit 1
             fi
-            '
+            EOF
+            chmod +x ~/scripts/deploy.sh
+            bash ~/scripts/deploy.sh "${{ steps.login-ecr.outputs.registry }}" "${{ env.ECR_REPOSITORY }}" "${{ steps.login-ecr.outputs.docker_password }}" "${{ github.sha }}" "${{ secrets.DB_HOST }}" "${{ secrets.DB_NAME }}" "${{ secrets.DB_USERNAME }}" "${{ secrets.DB_PASSWORD }}"
