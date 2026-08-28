@@ -3,22 +3,25 @@ exec > >(tee /home/ec2-user/deploy_run.log) 2>&1
 set -x
 set -e
 
-ECR_REGISTRY="$1"
-ECR_REPO="$2"
-ECR_PASSWORD="$3"
-IMAGE_TAG="$4"
-if [ -z "$IMAGE_TAG" ]; then
-    IMAGE_TAG="latest"
-fi
+AWS_ACCESS_KEY_ID="$1"
+AWS_SECRET_ACCESS_KEY="$2"
+ECR_REGISTRY="$3"
+ECR_REPO="$4"
 DB_HOST="$5"
 DB_NAME="$6"
 DB_USERNAME="$7"
 DB_PASSWORD="$8"
 
+IMAGE_TAG="latest"
+
 echo "=== Starting Blue-Green Deployment ==="
-if [ -n "$ECR_PASSWORD" ] && [ -n "$ECR_REGISTRY" ]; then
-    echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY" || true
-fi
+
+# ECR Login via AWS CLI directly on EC2
+export AWS_ACCESS_KEY_ID="$AWS_ACCESS_KEY_ID"
+export AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY"
+export AWS_DEFAULT_REGION="ap-northeast-2"
+
+aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin "$ECR_REGISTRY" || true
 
 if docker ps --filter "name=app-blue" --filter "status=running" -q | grep -q .; then
     NEW_PORT=8081
