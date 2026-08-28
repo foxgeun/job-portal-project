@@ -94,7 +94,11 @@ jobs:
           timeout: 300s
           script: |
             mkdir -p ~/scripts ~/logs
-            
+            cat << 'EOF' > ~/scripts/deploy_runner.sh
+            #!/bin/bash
+            exec > >(tee -a ~/logs/deploy.log) 2>&1
+            echo "=== DEPLOY START: $(date) ==="
+
             ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
             ECR_REPO="${{ env.ECR_REPOSITORY }}"
             ECR_PASSWORD="${{ steps.login-ecr.outputs.docker_password }}"
@@ -103,11 +107,10 @@ jobs:
             DB_NAME="${{ secrets.DB_NAME }}"
             DB_USERNAME="${{ secrets.DB_USERNAME }}"
             DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
-            
-            # Docker ECR Login
-            echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY" || true
 
-            # Determine Blue/Green Port & Container
+            echo "Logging into ECR..."
+            echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY" || exit 1
+
             if docker ps --filter "name=app-blue" --filter "status=running" -q | grep -q .; then
                 NEW_PORT=8081
                 NEW_CONTAINER="app-green"
@@ -118,17 +121,15 @@ jobs:
                 OLD_CONTAINER="app-green"
             fi
 
-            echo "Deploying new container $NEW_CONTAINER on port $NEW_PORT..."
+            echo "Deploying $NEW_CONTAINER on port $NEW_PORT..."
             FULL_IMAGE="$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
-            docker pull "$FULL_IMAGE"
-            
-            # Clean up target container & occupied port if any
+            docker pull "$FULL_IMAGE" || exit 1
+
             docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
             for pid in $(docker ps --filter "publish=$NEW_PORT" -q); do
                 docker rm -f "$pid" 2>/dev/null || true
             done
 
-            # Run new container
             docker run -d \
               --name "$NEW_CONTAINER" \
               --restart unless-stopped \
@@ -137,9 +138,8 @@ jobs:
               -e DB_NAME="$DB_NAME" \
               -e DB_USERNAME="$DB_USERNAME" \
               -e DB_PASSWORD="$DB_PASSWORD" \
-              "$FULL_IMAGE"
+              "$FULL_IMAGE" || exit 1
 
-            # Health Check (Up to 20 attempts x 5s = 100s)
             HEALTHY=0
             for i in $(seq 1 20); do
               STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$NEW_PORT/actuator/health" 2>/dev/null || echo "000")
@@ -157,10 +157,13 @@ jobs:
                 docker stop "$OLD_CONTAINER" 2>/dev/null || true
                 docker rm "$OLD_CONTAINER" 2>/dev/null || true
               fi
-              echo "🚀 Deployment succeeded! $NEW_CONTAINER is active on port $NEW_PORT."
+              echo "🚀 Deployment succeeded!"
               exit 0
             else
-              echo "❌ Health check failed. Rolling back $NEW_CONTAINER."
+              echo "❌ Health check failed."
               docker rm -f "$NEW_CONTAINER" 2>/dev/null || true
               exit 1
             fi
+            EOF
+            chmod +x ~/scripts/deploy_runner.sh
+            bash ~/scripts/deploy_runner.sh
