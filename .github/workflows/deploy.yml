@@ -93,6 +93,7 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
+            set -x
             mkdir -p ~/scripts ~/logs
             
             # ECR registry & credentials direct interpolation
@@ -104,7 +105,6 @@ jobs:
             DB_NAME="${{ secrets.DB_NAME }}"
             DB_USERNAME="${{ secrets.DB_USERNAME }}"
             DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
-            SARAMIN_API_KEY="${{ secrets.SARAMIN_API_KEY }}"
             
             # ECR Docker Login
             echo "$ECR_PASSWORD" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
@@ -140,7 +140,6 @@ jobs:
               -e DB_NAME="$DB_NAME" \
               -e DB_USERNAME="$DB_USERNAME" \
               -e DB_PASSWORD="$DB_PASSWORD" \
-              -e SARAMIN_API_KEY="$SARAMIN_API_KEY" \
               "$FULL_IMAGE"
 
             # 헬스 체크 (최대 15회 x 5초)
