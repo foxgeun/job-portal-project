@@ -93,4 +93,4 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 300s
           script: |
-            /bin/bash /home/ec2-user/scripts/deploy.sh "${{ steps.login-ecr.outputs.registry }}" "${{ env.ECR_REPOSITORY }}" "${{ steps.login-ecr.outputs.docker_password }}" "${{ github.sha }}" "${{ secrets.DB_HOST }}" "${{ secrets.DB_NAME }}" "${{ secrets.DB_USERNAME }}" "${{ secrets.DB_PASSWORD }}"
+            /bin/bash /home/ec2-user/scripts/deploy.sh "${{ steps.login-ecr.outputs.registry }}" "${{ env.ECR_REPOSITORY }}" "${{ steps.login-ecr.outputs.docker_password }}" "latest" "${{ secrets.DB_HOST }}" "${{ secrets.DB_NAME }}" "${{ secrets.DB_USERNAME }}" "${{ secrets.DB_PASSWORD }}"

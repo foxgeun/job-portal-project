@@ -5,6 +5,9 @@ ECR_REGISTRY="$1"
 ECR_REPO="$2"
 ECR_PASSWORD="$3"
 IMAGE_TAG="$4"
+if [ -z "$IMAGE_TAG" ]; then
+    IMAGE_TAG="latest"
+fi
 DB_HOST="$5"
 DB_NAME="$6"
 DB_USERNAME="$7"
